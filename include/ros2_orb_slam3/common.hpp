@@ -44,6 +44,11 @@ using std::placeholders::_1; //* TODO why this is suggested in official tutorial
 #include <opencv2/core/eigen.hpp>
 // #include <image_transport/image_transport.h> // For humble version only
 #include <image_transport/image_transport.hpp>
+#include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/synchronizer.h>
+
+using std::placeholders::_2; // For message_filters callback
 
 //* ORB SLAM 3 includes
 #include "System.h" //* Also imports the ORB_SLAM3 namespace
@@ -105,6 +110,48 @@ class MonocularMode : public rclcpp::Node
         void initializeVSLAM(std::string& configString); //* Method to bind an initialized VSLAM framework to this node
 
 
+};
+
+//* RGBD Mode Node - for RGB-D cameras like RealSense D405
+class RGBDMode : public rclcpp::Node
+{
+    public:
+        RGBDMode(); // Constructor
+        ~RGBDMode(); // Destructor
+
+    private:
+        // Class internal variables
+        std::string homeDir = "";
+        std::string packagePath = "";
+        std::string nodeName = "";
+        std::string vocFilePath = "";
+        std::string settingsFilePath = "";
+        std::string settingsName = "";
+        bool bInitialized = false;
+
+        // ROS2 topic names
+        std::string rgbTopicName = "";
+        std::string depthTopicName = "";
+
+        // Message filters for synchronized RGB-D subscription
+        message_filters::Subscriber<sensor_msgs::msg::Image> rgb_sub_;
+        message_filters::Subscriber<sensor_msgs::msg::Image> depth_sub_;
+
+        typedef message_filters::sync_policies::ApproximateTime<
+            sensor_msgs::msg::Image, sensor_msgs::msg::Image> SyncPolicy;
+        std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
+
+        // ORB_SLAM3 related variables
+        ORB_SLAM3::System* pAgent;
+        ORB_SLAM3::System::eSensor sensorType;
+        bool enablePangolinWindow = true;
+
+        // ROS callbacks
+        void rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
+                          const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg);
+
+        // Helper functions
+        void initializeVSLAM();
 };
 
 #endif

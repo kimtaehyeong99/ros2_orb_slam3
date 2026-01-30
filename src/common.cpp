@@ -21,7 +21,7 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     
     //* Find path to home directory
     homeDir = getenv("HOME");
-    packagePath = "ros2_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+    packagePath = "umi_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
     // std::cout<<"Home: "<<homeDir<<std::endl;
     
     // std::cout<<"VLSAM NODE STARTED\n\n";
@@ -187,6 +187,139 @@ void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
     //* An example of what can be done after the pose w.r.t camera coordinate frame is computed by ORB SLAM3
     //Sophus::SE3f Twc = Tcw.inverse(); //* Pose with respect to global image coordinate, reserved for future use
 
+}
+
+// ============================================================================
+// RGBDMode Implementation - for RGB-D cameras like RealSense D405
+// ============================================================================
+
+//* Constructor
+RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
+{
+    //* Find path to home directory
+    homeDir = getenv("HOME");
+    packagePath = "umi_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+
+    RCLCPP_INFO(this->get_logger(), "\nORB-SLAM3-V1 RGBD NODE STARTED");
+
+    // Declare parameters
+    this->declare_parameter("settings_name", "RealSense_D405");
+    this->declare_parameter("rgb_topic", "/camera/camera/color/image_raw");
+    this->declare_parameter("depth_topic", "/camera/camera/depth/image_rect_raw");
+
+    // Get parameter values
+    settingsName = this->get_parameter("settings_name").as_string();
+    rgbTopicName = this->get_parameter("rgb_topic").as_string();
+    depthTopicName = this->get_parameter("depth_topic").as_string();
+
+    // Set default paths
+    vocFilePath = homeDir + "/" + packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
+    settingsFilePath = homeDir + "/" + packagePath + "orb_slam3/config/RGBD/" + settingsName + ".yaml";
+
+    RCLCPP_INFO(this->get_logger(), "Settings name: %s", settingsName.c_str());
+    RCLCPP_INFO(this->get_logger(), "Vocabulary file: %s", vocFilePath.c_str());
+    RCLCPP_INFO(this->get_logger(), "Settings file: %s", settingsFilePath.c_str());
+    RCLCPP_INFO(this->get_logger(), "RGB topic: %s", rgbTopicName.c_str());
+    RCLCPP_INFO(this->get_logger(), "Depth topic: %s", depthTopicName.c_str());
+
+    // Initialize ORB-SLAM3 system
+    initializeVSLAM();
+
+    // Setup message filters for synchronized RGB-D subscription
+    rgb_sub_.subscribe(this, rgbTopicName);
+    depth_sub_.subscribe(this, depthTopicName);
+
+    sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
+        SyncPolicy(10), rgb_sub_, depth_sub_);
+    sync_->registerCallback(std::bind(&RGBDMode::rgbd_callback, this, _1, _2));
+
+    RCLCPP_INFO(this->get_logger(), "RGBD Node initialized, waiting for camera data...");
+}
+
+//* Destructor
+RGBDMode::~RGBDMode()
+{
+    if (pAgent != nullptr) {
+        pAgent->Shutdown();
+    }
+}
+
+//* Initialize ORB-SLAM3 system
+void RGBDMode::initializeVSLAM()
+{
+    // Check if files exist
+    std::ifstream vocFile(vocFilePath);
+    std::ifstream settingsFile(settingsFilePath);
+
+    if (!vocFile.good()) {
+        RCLCPP_ERROR(this->get_logger(), "Vocabulary file not found: %s", vocFilePath.c_str());
+        rclcpp::shutdown();
+        return;
+    }
+
+    if (!settingsFile.good()) {
+        RCLCPP_ERROR(this->get_logger(), "Settings file not found: %s", settingsFilePath.c_str());
+        rclcpp::shutdown();
+        return;
+    }
+
+    vocFile.close();
+    settingsFile.close();
+
+    // Initialize ORB-SLAM3 with RGBD sensor type
+    sensorType = ORB_SLAM3::System::RGBD;
+    enablePangolinWindow = true;
+
+    RCLCPP_INFO(this->get_logger(), "Initializing ORB-SLAM3 in RGBD mode...");
+    pAgent = new ORB_SLAM3::System(vocFilePath, settingsFilePath, sensorType, enablePangolinWindow);
+    bInitialized = true;
+    RCLCPP_INFO(this->get_logger(), "ORB-SLAM3 RGBD system initialized successfully!");
+}
+
+//* Callback to process synchronized RGB and Depth images
+void RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
+                             const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg)
+{
+    if (!bInitialized) {
+        return;
+    }
+
+    cv_bridge::CvImageConstPtr cv_rgb_ptr;
+    cv_bridge::CvImageConstPtr cv_depth_ptr;
+
+    try {
+        // Convert RGB image
+        cv_rgb_ptr = cv_bridge::toCvShare(rgb_msg, sensor_msgs::image_encodings::BGR8);
+
+        // Convert Depth image (preserve original encoding for depth)
+        cv_depth_ptr = cv_bridge::toCvShare(depth_msg);
+    }
+    catch (cv_bridge::Exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    // Get timestamp in seconds
+    double timestamp = rgb_msg->header.stamp.sec + rgb_msg->header.stamp.nanosec * 1e-9;
+
+    // Convert depth to CV_32F if needed (ORB-SLAM3 expects float depth)
+    // NOTE: Keep depth in mm unit, ORB-SLAM3 will convert using DepthMapFactor from YAML
+    cv::Mat depth_float;
+    if (cv_depth_ptr->image.type() == CV_16UC1) {
+        // Type conversion only, keep mm unit (ORB-SLAM3 uses DepthMapFactor for mm->m conversion)
+        cv_depth_ptr->image.convertTo(depth_float, CV_32F);
+    } else if (cv_depth_ptr->image.type() == CV_32FC1) {
+        depth_float = cv_depth_ptr->image;
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Unexpected depth image type: %d", cv_depth_ptr->image.type());
+        cv_depth_ptr->image.convertTo(depth_float, CV_32F);
+    }
+
+    // Run ORB-SLAM3 RGBD tracking
+    Sophus::SE3f Tcw = pAgent->TrackRGBD(cv_rgb_ptr->image, depth_float, timestamp);
+
+    // Optional: You can publish the camera pose here
+    // Sophus::SE3f Twc = Tcw.inverse(); // Camera pose in world frame
 }
 
 

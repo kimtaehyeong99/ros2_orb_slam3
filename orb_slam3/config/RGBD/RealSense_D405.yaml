@@ -1,0 +1,88 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters for RealSense D405 (RGB-D mode)
+# Note: These are approximate values based on D435i.
+# For accurate results, calibrate your specific camera.
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+Camera.type: "PinHole"
+
+# Camera calibration parameters (OpenCV)
+# D405 intrinsics at 848x480 resolution (from camera_info topic)
+Camera1.fx: 433.6536
+Camera1.fy: 433.0674
+Camera1.cx: 427.3414
+Camera1.cy: 242.9150
+
+# Distortion parameters (rectified images have zero distortion)
+Camera1.k1: 0.0
+Camera1.k2: 0.0
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+
+# Camera resolution
+Camera.width: 848
+Camera.height: 480
+
+# Camera frames per second
+Camera.fps: 30
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+#--------------------------------------------------------------------------------------------
+# RGB-D Specific Parameters
+#--------------------------------------------------------------------------------------------
+# RGB-D/Stereo Parameters
+#--------------------------------------------------------------------------------------------
+# Stereo baseline in meters (D405 has ~18mm baseline)
+Stereo.b: 0.018
+
+# Stereo baseline times fx
+# Camera.bf = baseline(m) * fx = 0.018 * 433.6536 = 7.806
+Camera.bf: 7.806
+
+# Close/Far Depth threshold. Baseline times.
+# Points seen with depth < ThDepth * baseline will be treated as close points
+Stereo.ThDepth: 40.0
+
+# Depth map factor (to convert depth values to meters)
+# RealSense provides depth in millimeters (16-bit)
+# ORB-SLAM3 calculates: mDepthMapFactor = 1/DepthMapFactor = 1/1000 = 0.001
+# Then applies: depth_meters = depth_mm * 0.001
+RGBD.DepthMapFactor: 1000.0
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+# ORB Extractor: Number of features per image
+ORBextractor.nFeatures: 1000
+
+# ORB Extractor: Scale factor between levels in the scale pyramid
+ORBextractor.scaleFactor: 1.2
+
+# ORB Extractor: Number of levels in the scale pyramid
+ORBextractor.nLevels: 8
+
+# ORB Extractor: Fast threshold
+# Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
+# Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
+# You can lower these values if your images have low contrast
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0

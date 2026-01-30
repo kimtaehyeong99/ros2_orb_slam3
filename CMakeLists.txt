@@ -25,6 +25,7 @@ find_package(OpenCV 4.6 REQUIRED) # In Ubuntu 24.04 4.6 or greater is required
 find_package(Eigen3 3.3.0 REQUIRED) # Matched with Sophus
 find_package(Pangolin REQUIRED)
 find_package(image_transport REQUIRED)
+find_package(message_filters REQUIRED)
 
 # Header file locations [C++ node]
 include_directories(include) # Add .hpp, .h files from include/ros2_orb_slam3
@@ -57,6 +58,7 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   # your_custom_msg_interface
   cv_bridge
   image_transport
+  message_filters
   OpenCV
   Eigen3
   Pangolin
@@ -158,6 +160,19 @@ ament_target_dependencies(mono_node_cpp
 target_link_libraries(mono_node_cpp PUBLIC orb_slam3_lib) # Link a node with the internal shared library
 
 
+# RGBD node executable
+add_executable(rgbd_node_cpp
+  src/rgbd_example.cpp
+  src/common.cpp
+)
+
+ament_target_dependencies(rgbd_node_cpp
+  PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+
+target_link_libraries(rgbd_node_cpp PUBLIC orb_slam3_lib) # Link a node with the internal shared library
+
+
 # Install all the header files in package/package/include
 install (DIRECTORY include/ 
         DESTINATION include
@@ -173,7 +188,7 @@ install(DIRECTORY
  )
 
 # Install our node and library
-install(TARGETS mono_node_cpp orb_slam3_lib DBoW2 g2o
+install(TARGETS mono_node_cpp rgbd_node_cpp orb_slam3_lib DBoW2 g2o
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
