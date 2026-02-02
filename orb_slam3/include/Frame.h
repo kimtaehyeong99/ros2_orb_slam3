@@ -219,6 +219,9 @@ public:
     // Far points are inserted as in the monocular case from 2 views.
     float mThDepth;
 
+    // Minimum depth threshold to filter close objects (e.g., robot gripper)
+    static float mMinDepth;
+
     // Number of KeyPoints.
     int N;
 

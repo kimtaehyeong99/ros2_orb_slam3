@@ -93,6 +93,7 @@ namespace ORB_SLAM3 {
         bool insertKFsWhenLost() {return insertKFsWhenLost_;}
 
         float depthMapFactor() {return depthMapFactor_;}
+        float minDepth() {return minDepth_;}
 
         int nFeatures() {return nFeatures_;}
         int nLevels() {return nLevels_;}
@@ -197,6 +198,7 @@ namespace ORB_SLAM3 {
          * RGBD stuff
          */
         float depthMapFactor_;
+        float minDepth_;
 
         /*
          * ORB stuff

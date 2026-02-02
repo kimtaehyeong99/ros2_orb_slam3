@@ -38,6 +38,7 @@ bool Frame::mbInitialComputations=true;
 float Frame::cx, Frame::cy, Frame::fx, Frame::fy, Frame::invfx, Frame::invfy;
 float Frame::mnMinX, Frame::mnMinY, Frame::mnMaxX, Frame::mnMaxY;
 float Frame::mfGridElementWidthInv, Frame::mfGridElementHeightInv;
+float Frame::mMinDepth = 0.0f;
 
 //For stereo fisheye matching
 cv::BFMatcher Frame::BFmatcher = cv::BFMatcher(cv::NORM_HAMMING);
@@ -996,7 +997,8 @@ void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
 
         const float d = imDepth.at<float>(v,u);
 
-        if(d>0)
+        // Filter out features closer than mMinDepth (e.g., robot gripper)
+        if(d > 0 && d > mMinDepth)
         {
             mvDepth[i] = d;
             mvuRight[i] = kpU.pt.x-mbf/d;

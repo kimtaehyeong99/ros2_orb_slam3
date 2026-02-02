@@ -10,20 +10,20 @@ File.version: "1.0"
 Camera.type: "PinHole"
 
 # Camera calibration parameters (OpenCV)
-# D405 intrinsics at 848x480 resolution (from camera_info topic)
-Camera1.fx: 433.6536
-Camera1.fy: 433.0674
-Camera1.cx: 427.3414
-Camera1.cy: 242.9150
+# D405 intrinsics at 640x480 resolution (from camera_info topic)
+Camera1.fx: 391.305
+Camera1.fy: 390.776
+Camera1.cx: 323.015
+Camera1.cy: 242.630
 
-# Distortion parameters (rectified images have zero distortion)
-Camera1.k1: 0.0
-Camera1.k2: 0.0
-Camera1.p1: 0.0
-Camera1.p2: 0.0
+# Distortion parameters
+Camera1.k1: -0.0538
+Camera1.k2: 0.0614
+Camera1.p1: -0.0005
+Camera1.p2: 0.0008
 
 # Camera resolution
-Camera.width: 848
+Camera.width: 640
 Camera.height: 480
 
 # Camera frames per second
@@ -41,12 +41,13 @@ Camera.RGB: 1
 Stereo.b: 0.018
 
 # Stereo baseline times fx
-# Camera.bf = baseline(m) * fx = 0.018 * 433.6536 = 7.806
-Camera.bf: 7.806
+# Camera.bf = baseline(m) * fx = 0.018 * 391.305 = 7.043
+Camera.bf: 7.043
 
 # Close/Far Depth threshold. Baseline times.
 # Points seen with depth < ThDepth * baseline will be treated as close points
-Stereo.ThDepth: 40.0
+# D405 근거리 최적화: 30 * 0.018m = 0.54m
+Stereo.ThDepth: 50.0
 
 # Depth map factor (to convert depth values to meters)
 # RealSense provides depth in millimeters (16-bit)
@@ -54,24 +55,31 @@ Stereo.ThDepth: 40.0
 # Then applies: depth_meters = depth_mm * 0.001
 RGBD.DepthMapFactor: 1000.0
 
+# Minimum depth threshold to filter close objects (e.g., robot gripper)
+# Features closer than this distance (in meters) will be ignored
+# Set to 0.0 to disable filtering
+RGBD.MinDepth: 0.25
+
 #--------------------------------------------------------------------------------------------
 # ORB Parameters
 #--------------------------------------------------------------------------------------------
 # ORB Extractor: Number of features per image
-ORBextractor.nFeatures: 1000
+# 품질 향상을 위해 1000 → 2000 증가
+ORBextractor.nFeatures: 2000
 
 # ORB Extractor: Scale factor between levels in the scale pyramid
 ORBextractor.scaleFactor: 1.2
 
 # ORB Extractor: Number of levels in the scale pyramid
-ORBextractor.nLevels: 8
+# 스케일 불변성 향상을 위해 8 → 10 증가
+ORBextractor.nLevels: 10
 
 # ORB Extractor: Fast threshold
 # Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
 # Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
-# You can lower these values if your images have low contrast
-ORBextractor.iniThFAST: 20
-ORBextractor.minThFAST: 7
+# D405 실내 환경용으로 임계값 낮춤 (더 많은 특징점 검출)
+ORBextractor.iniThFAST: 15
+ORBextractor.minThFAST: 5
 
 #--------------------------------------------------------------------------------------------
 # Viewer Parameters

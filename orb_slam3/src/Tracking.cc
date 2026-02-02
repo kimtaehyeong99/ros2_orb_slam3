@@ -615,6 +615,9 @@ void Tracking::newParameterLoader(Settings *settings) {
             mDepthMapFactor=1;
         else
             mDepthMapFactor = 1.0f/mDepthMapFactor;
+
+        // Set minimum depth threshold for filtering close objects (e.g., robot gripper)
+        Frame::mMinDepth = settings->minDepth();
     }
 
     mMinFrames = 0;

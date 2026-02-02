@@ -438,6 +438,11 @@ namespace ORB_SLAM3 {
         thDepth_ = readParameter<float>(fSettings,"Stereo.ThDepth",found);
         b_ = readParameter<float>(fSettings,"Stereo.b",found);
         bf_ = b_ * calibration1_->getParameter(0);
+
+        // Read minimum depth threshold (optional, default 0.0 = disabled)
+        minDepth_ = readParameter<float>(fSettings,"RGBD.MinDepth",found,false);
+        if(!found)
+            minDepth_ = 0.0f;
     }
 
     void Settings::readORB(cv::FileStorage &fSettings) {
