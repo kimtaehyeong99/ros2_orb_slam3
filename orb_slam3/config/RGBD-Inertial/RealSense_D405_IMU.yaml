@@ -1,0 +1,110 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters for RealSense D405 with External IMU (RGBD-Inertial mode)
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+Camera.type: "PinHole"
+
+# Camera calibration parameters (OpenCV)
+# D405 intrinsics at 848x480 resolution (from camera_info topic)
+Camera1.fx: 433.6536
+Camera1.fy: 433.0674
+Camera1.cx: 427.3414
+Camera1.cy: 242.9150
+
+# Distortion parameters (rectified images have zero distortion)
+Camera1.k1: 0.0
+Camera1.k2: 0.0
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+
+# Camera resolution
+Camera.width: 848
+Camera.height: 480
+
+# Camera frames per second
+Camera.fps: 30
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+#--------------------------------------------------------------------------------------------
+# RGB-D Specific Parameters
+#--------------------------------------------------------------------------------------------
+# Stereo baseline in meters (D405 has ~18mm baseline)
+Stereo.b: 0.018
+
+# Stereo baseline times fx
+# Camera.bf = baseline(m) * fx = 0.018 * 433.6536 = 7.806
+Camera.bf: 7.806
+
+# Close/Far Depth threshold. Baseline times.
+# D405 close range optimized: 30 * 0.018m = 0.54m
+Stereo.ThDepth: 30.0
+
+# Depth map factor (to convert depth values to meters)
+# RealSense provides depth in millimeters (16-bit)
+RGBD.DepthMapFactor: 1000.0
+
+#--------------------------------------------------------------------------------------------
+# IMU Parameters
+#--------------------------------------------------------------------------------------------
+# Transformation from IMU body frame to camera frame (4x4 matrix)
+# IMPORTANT: This needs to be calibrated for your specific setup!
+# Default is identity matrix - calibrate using Kalibr or measure physically
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [1.0, 0.0, 0.0, 0.0,
+          0.0, 1.0, 0.0, 0.0,
+          0.0, 0.0, 1.0, 0.0,
+          0.0, 0.0, 0.0, 1.0]
+
+# IMU noise parameters (adjust based on your IMU datasheet)
+# These are typical values - calibrate for better accuracy
+IMU.NoiseGyro: 1.0e-3        # rad/s^0.5 - gyroscope white noise
+IMU.NoiseAcc: 1.0e-2         # m/s^1.5 - accelerometer white noise
+IMU.GyroWalk: 1.0e-6         # rad/s^1.5 - gyroscope bias random walk
+IMU.AccWalk: 1.0e-4          # m/s^2.5 - accelerometer bias random walk
+
+# IMU sampling frequency
+IMU.Frequency: 200.0
+
+# Do not insert keyframes when lost (recommended for IMU mode)
+IMU.InsertKFsWhenLost: 0
+
+# Fast IMU initialization (0: normal, 1: skip some checks)
+IMU.fastInit: 0
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters (optimized for quality)
+#--------------------------------------------------------------------------------------------
+# ORB Extractor: Number of features per image
+ORBextractor.nFeatures: 1500
+
+# ORB Extractor: Scale factor between levels in the scale pyramid
+ORBextractor.scaleFactor: 1.2
+
+# ORB Extractor: Number of levels in the scale pyramid
+ORBextractor.nLevels: 10
+
+# ORB Extractor: Fast threshold
+ORBextractor.iniThFAST: 15
+ORBextractor.minThFAST: 5
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0

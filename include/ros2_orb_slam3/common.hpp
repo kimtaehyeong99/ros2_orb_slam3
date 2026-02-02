@@ -26,6 +26,8 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/imu.hpp"
+#include <deque>
 using std::placeholders::_1; //* TODO why this is suggested in official tutorial
 
 // Include Eigen
@@ -52,6 +54,7 @@ using std::placeholders::_2; // For message_filters callback
 
 //* ORB SLAM 3 includes
 #include "System.h" //* Also imports the ORB_SLAM3 namespace
+#include "ImuTypes.h" //* For IMU data types
 
 //* Gobal defs
 #define pass (void)0 // Python's equivalent of "pass" i.e. no operation
@@ -151,6 +154,58 @@ class RGBDMode : public rclcpp::Node
                           const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg);
 
         // Helper functions
+        void initializeVSLAM();
+};
+
+//* IMU_RGBD Mode Node - for RGB-D cameras with external IMU
+class IMU_RGBDMode : public rclcpp::Node
+{
+    public:
+        IMU_RGBDMode(); // Constructor
+        ~IMU_RGBDMode(); // Destructor
+
+    private:
+        // Class internal variables
+        std::string homeDir = "";
+        std::string packagePath = "";
+        std::string vocFilePath = "";
+        std::string settingsFilePath = "";
+        std::string settingsName = "";
+        bool bInitialized = false;
+
+        // ROS2 topic names
+        std::string rgbTopicName = "";
+        std::string depthTopicName = "";
+        std::string imuTopicName = "";
+
+        // IMU buffer (200Hz IMU -> 30Hz camera synchronization)
+        std::deque<ORB_SLAM3::IMU::Point> imuBuffer_;
+        std::mutex imuMutex_;
+        double lastImageTime_ = 0.0;
+
+        // IMU subscriber
+        rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+
+        // Message filters for synchronized RGB-D subscription
+        message_filters::Subscriber<sensor_msgs::msg::Image> rgb_sub_;
+        message_filters::Subscriber<sensor_msgs::msg::Image> depth_sub_;
+
+        typedef message_filters::sync_policies::ApproximateTime<
+            sensor_msgs::msg::Image, sensor_msgs::msg::Image> SyncPolicy;
+        std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
+
+        // ORB_SLAM3 related variables
+        ORB_SLAM3::System* pAgent = nullptr;
+        ORB_SLAM3::System::eSensor sensorType;
+        bool enablePangolinWindow = true;
+
+        // ROS callbacks
+        void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
+        void rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
+                          const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg);
+
+        // Helper functions
+        std::vector<ORB_SLAM3::IMU::Point> getImuMeasurements(double t0, double t1);
         void initializeVSLAM();
 };
 

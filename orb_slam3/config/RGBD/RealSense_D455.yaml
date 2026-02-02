@@ -1,0 +1,81 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters for RealSense D455 (RGB-D mode)
+#--------------------------------------------------------------------------------------------
+File.version: "1.0"
+
+Camera.type: "PinHole"
+
+# Camera calibration parameters (OpenCV)
+# D455 intrinsics at 1280x720 resolution (from camera_info topic)
+Camera1.fx: 640.8776
+Camera1.fy: 639.1833
+Camera1.cx: 633.9394
+Camera1.cy: 371.0262
+
+# Distortion parameters (using rectified images, set to zero)
+Camera1.k1: 0.0
+Camera1.k2: 0.0
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+
+# Camera resolution
+Camera.width: 1280
+Camera.height: 720
+
+# Camera frames per second
+Camera.fps: 30
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+#--------------------------------------------------------------------------------------------
+# RGB-D Specific Parameters
+#--------------------------------------------------------------------------------------------
+# Stereo baseline in meters (D455 has ~95mm baseline)
+Stereo.b: 0.095
+
+# Stereo baseline times fx
+# Camera.bf = baseline(m) * fx = 0.095 * 640.8776 = 60.883
+Camera.bf: 60.883
+
+# Close/Far Depth threshold. Baseline times.
+# Points seen with depth < ThDepth * baseline will be treated as close points
+# D455: 40 * 0.095m = 3.8m (D455 optimal range: 0.6m - 6m)
+Stereo.ThDepth: 40.0
+
+# Depth map factor (to convert depth values to meters)
+# RealSense provides depth in millimeters (16-bit)
+RGBD.DepthMapFactor: 1000.0
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters (optimized for quality)
+#--------------------------------------------------------------------------------------------
+# ORB Extractor: Number of features per image
+# 1280x720 고해상도용으로 증가
+ORBextractor.nFeatures: 2000
+
+# ORB Extractor: Scale factor between levels in the scale pyramid
+ORBextractor.scaleFactor: 1.2
+
+# ORB Extractor: Number of levels in the scale pyramid
+ORBextractor.nLevels: 10
+
+# ORB Extractor: Fast threshold
+ORBextractor.iniThFAST: 15
+ORBextractor.minThFAST: 5
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500.0

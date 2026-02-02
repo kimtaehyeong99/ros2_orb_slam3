@@ -204,8 +204,8 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
 
     // Declare parameters
     this->declare_parameter("settings_name", "RealSense_D405");
-    this->declare_parameter("rgb_topic", "/camera/camera/color/image_raw");
-    this->declare_parameter("depth_topic", "/camera/camera/depth/image_rect_raw");
+    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw");
+    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
 
     // Get parameter values
     settingsName = this->get_parameter("settings_name").as_string();
@@ -322,4 +322,196 @@ void RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_
     // Sophus::SE3f Twc = Tcw.inverse(); // Camera pose in world frame
 }
 
+
+// ============================================================================
+// IMU_RGBDMode Implementation - RGBD + IMU for Visual-Inertial SLAM
+// ============================================================================
+
+//* Constructor
+IMU_RGBDMode::IMU_RGBDMode() : Node("rgbd_imu_node_cpp")
+{
+    //* Find path to home directory
+    homeDir = getenv("HOME");
+    packagePath = "umi_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+
+    RCLCPP_INFO(this->get_logger(), "\nORB-SLAM3 IMU_RGBD NODE STARTED");
+
+    // Declare parameters
+    this->declare_parameter("settings_name", "RealSense_D405_IMU");
+    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw");
+    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
+    this->declare_parameter("imu_topic", "/imu/data");
+
+    // Get parameter values
+    settingsName = this->get_parameter("settings_name").as_string();
+    rgbTopicName = this->get_parameter("rgb_topic").as_string();
+    depthTopicName = this->get_parameter("depth_topic").as_string();
+    imuTopicName = this->get_parameter("imu_topic").as_string();
+
+    // Set paths (RGBD-Inertial config directory)
+    vocFilePath = homeDir + "/" + packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
+    settingsFilePath = homeDir + "/" + packagePath + "orb_slam3/config/RGBD-Inertial/" + settingsName + ".yaml";
+
+    RCLCPP_INFO(this->get_logger(), "Settings name: %s", settingsName.c_str());
+    RCLCPP_INFO(this->get_logger(), "Vocabulary file: %s", vocFilePath.c_str());
+    RCLCPP_INFO(this->get_logger(), "Settings file: %s", settingsFilePath.c_str());
+    RCLCPP_INFO(this->get_logger(), "RGB topic: %s", rgbTopicName.c_str());
+    RCLCPP_INFO(this->get_logger(), "Depth topic: %s", depthTopicName.c_str());
+    RCLCPP_INFO(this->get_logger(), "IMU topic: %s", imuTopicName.c_str());
+
+    // Initialize ORB-SLAM3 system
+    initializeVSLAM();
+
+    // Subscribe to IMU (separate subscription with buffering)
+    imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
+        imuTopicName, 1000,  // Large queue size for 200Hz IMU
+        std::bind(&IMU_RGBDMode::imu_callback, this, std::placeholders::_1));
+
+    // Setup message filters for synchronized RGB-D subscription
+    rgb_sub_.subscribe(this, rgbTopicName);
+    depth_sub_.subscribe(this, depthTopicName);
+
+    sync_ = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
+        SyncPolicy(10), rgb_sub_, depth_sub_);
+    sync_->registerCallback(std::bind(&IMU_RGBDMode::rgbd_callback, this, _1, _2));
+
+    RCLCPP_INFO(this->get_logger(), "IMU_RGBD Node initialized, waiting for camera and IMU data...");
+}
+
+//* Destructor
+IMU_RGBDMode::~IMU_RGBDMode()
+{
+    if (pAgent != nullptr) {
+        pAgent->Shutdown();
+    }
+}
+
+//* Initialize ORB-SLAM3 system
+void IMU_RGBDMode::initializeVSLAM()
+{
+    // Check if files exist
+    std::ifstream vocFile(vocFilePath);
+    std::ifstream settingsFile(settingsFilePath);
+
+    if (!vocFile.good()) {
+        RCLCPP_ERROR(this->get_logger(), "Vocabulary file not found: %s", vocFilePath.c_str());
+        rclcpp::shutdown();
+        return;
+    }
+
+    if (!settingsFile.good()) {
+        RCLCPP_ERROR(this->get_logger(), "Settings file not found: %s", settingsFilePath.c_str());
+        rclcpp::shutdown();
+        return;
+    }
+
+    vocFile.close();
+    settingsFile.close();
+
+    // Initialize ORB-SLAM3 with IMU_RGBD sensor type
+    sensorType = ORB_SLAM3::System::IMU_RGBD;
+    enablePangolinWindow = true;
+
+    RCLCPP_INFO(this->get_logger(), "Initializing ORB-SLAM3 in IMU_RGBD mode...");
+    pAgent = new ORB_SLAM3::System(vocFilePath, settingsFilePath, sensorType, enablePangolinWindow);
+    bInitialized = true;
+    RCLCPP_INFO(this->get_logger(), "ORB-SLAM3 IMU_RGBD system initialized successfully!");
+}
+
+//* Callback to process IMU messages
+void IMU_RGBDMode::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
+{
+    // Convert ROS2 IMU message to ORB_SLAM3::IMU::Point
+    double t = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
+
+    ORB_SLAM3::IMU::Point imuPoint(
+        static_cast<float>(msg->linear_acceleration.x),
+        static_cast<float>(msg->linear_acceleration.y),
+        static_cast<float>(msg->linear_acceleration.z),
+        static_cast<float>(msg->angular_velocity.x),
+        static_cast<float>(msg->angular_velocity.y),
+        static_cast<float>(msg->angular_velocity.z),
+        t
+    );
+
+    std::lock_guard<std::mutex> lock(imuMutex_);
+    imuBuffer_.push_back(imuPoint);
+
+    // Limit buffer size (keep ~2 seconds of data at 200Hz = 400 samples)
+    while (imuBuffer_.size() > 400) {
+        imuBuffer_.pop_front();
+    }
+}
+
+//* Get IMU measurements between two timestamps
+std::vector<ORB_SLAM3::IMU::Point> IMU_RGBDMode::getImuMeasurements(double t0, double t1)
+{
+    std::vector<ORB_SLAM3::IMU::Point> measurements;
+    std::lock_guard<std::mutex> lock(imuMutex_);
+
+    for (const auto& imu : imuBuffer_) {
+        if (imu.t >= t0 && imu.t <= t1) {
+            measurements.push_back(imu);
+        }
+    }
+
+    // Remove old data from buffer
+    while (!imuBuffer_.empty() && imuBuffer_.front().t < t0) {
+        imuBuffer_.pop_front();
+    }
+
+    return measurements;
+}
+
+//* Callback to process synchronized RGB and Depth images
+void IMU_RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
+                                  const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg)
+{
+    if (!bInitialized) {
+        return;
+    }
+
+    cv_bridge::CvImageConstPtr cv_rgb_ptr;
+    cv_bridge::CvImageConstPtr cv_depth_ptr;
+
+    try {
+        // Convert RGB image
+        cv_rgb_ptr = cv_bridge::toCvShare(rgb_msg, sensor_msgs::image_encodings::BGR8);
+
+        // Convert Depth image (preserve original encoding for depth)
+        cv_depth_ptr = cv_bridge::toCvShare(depth_msg);
+    }
+    catch (cv_bridge::Exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    // Get timestamp in seconds
+    double timestamp = rgb_msg->header.stamp.sec + rgb_msg->header.stamp.nanosec * 1e-9;
+
+    // Convert depth to CV_32F if needed
+    cv::Mat depth_float;
+    if (cv_depth_ptr->image.type() == CV_16UC1) {
+        cv_depth_ptr->image.convertTo(depth_float, CV_32F);
+    } else if (cv_depth_ptr->image.type() == CV_32FC1) {
+        depth_float = cv_depth_ptr->image;
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Unexpected depth image type: %d", cv_depth_ptr->image.type());
+        cv_depth_ptr->image.convertTo(depth_float, CV_32F);
+    }
+
+    // Collect IMU measurements between previous and current frame
+    std::vector<ORB_SLAM3::IMU::Point> vImuMeas;
+    if (lastImageTime_ > 0) {
+        vImuMeas = getImuMeasurements(lastImageTime_, timestamp);
+        RCLCPP_DEBUG(this->get_logger(), "IMU measurements collected: %zu", vImuMeas.size());
+    }
+    lastImageTime_ = timestamp;
+
+    // Run ORB-SLAM3 RGBD tracking with IMU data
+    Sophus::SE3f Tcw = pAgent->TrackRGBD(cv_rgb_ptr->image, depth_float, timestamp, vImuMeas);
+
+    // Optional: You can publish the camera pose here
+    // Sophus::SE3f Twc = Tcw.inverse(); // Camera pose in world frame
+}
 

@@ -173,6 +173,19 @@ ament_target_dependencies(rgbd_node_cpp
 target_link_libraries(rgbd_node_cpp PUBLIC orb_slam3_lib) # Link a node with the internal shared library
 
 
+# RGBD-IMU node executable (Visual-Inertial SLAM)
+add_executable(rgbd_imu_node_cpp
+  src/rgbd_imu_example.cpp
+  src/common.cpp
+)
+
+ament_target_dependencies(rgbd_imu_node_cpp
+  PUBLIC ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+
+target_link_libraries(rgbd_imu_node_cpp PUBLIC orb_slam3_lib) # Link a node with the internal shared library
+
+
 # Install all the header files in package/package/include
 install (DIRECTORY include/ 
         DESTINATION include
@@ -188,7 +201,7 @@ install(DIRECTORY
  )
 
 # Install our node and library
-install(TARGETS mono_node_cpp rgbd_node_cpp orb_slam3_lib DBoW2 g2o
+install(TARGETS mono_node_cpp rgbd_node_cpp rgbd_imu_node_cpp orb_slam3_lib DBoW2 g2o
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
