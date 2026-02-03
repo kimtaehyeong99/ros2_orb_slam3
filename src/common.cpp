@@ -204,8 +204,8 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
 
     // Declare parameters
     this->declare_parameter("settings_name", "RealSense_D405");
-    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw");
-    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
+    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw/compressed");
+    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw/compressedDepth");
     this->declare_parameter("enable_viewer", true);
 
     // Get parameter values
@@ -396,8 +396,8 @@ IMU_RGBDMode::IMU_RGBDMode() : Node("rgbd_imu_node_cpp")
 
     // Declare parameters
     this->declare_parameter("settings_name", "RealSense_D405_IMU");
-    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw");
-    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
+    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw/compressed");
+    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw/compressedDepth");
     this->declare_parameter("imu_topic", "/imu/data");
 
     // Get parameter values
