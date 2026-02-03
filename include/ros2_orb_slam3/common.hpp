@@ -50,6 +50,12 @@ using std::placeholders::_1; //* TODO why this is suggested in official tutorial
 #include <message_filters/sync_policies/approximate_time.h>
 #include <message_filters/synchronizer.h>
 
+// Pose publishing includes
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+
 using std::placeholders::_2; // For message_filters callback
 
 //* ORB SLAM 3 includes
@@ -149,12 +155,19 @@ class RGBDMode : public rclcpp::Node
         ORB_SLAM3::System::eSensor sensorType;
         bool enablePangolinWindow = true;
 
+        // Pose publishers
+        rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
+        rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+        std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+        nav_msgs::msg::Path camera_path_;
+
         // ROS callbacks
         void rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
                           const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg);
 
         // Helper functions
         void initializeVSLAM();
+        void publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stamp);
 };
 
 //* IMU_RGBD Mode Node - for RGB-D cameras with external IMU
@@ -199,6 +212,12 @@ class IMU_RGBDMode : public rclcpp::Node
         ORB_SLAM3::System::eSensor sensorType;
         bool enablePangolinWindow = true;
 
+        // Pose publishers
+        rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
+        rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+        std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+        nav_msgs::msg::Path camera_path_;
+
         // ROS callbacks
         void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
         void rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
@@ -207,6 +226,7 @@ class IMU_RGBDMode : public rclcpp::Node
         // Helper functions
         std::vector<ORB_SLAM3::IMU::Point> getImuMeasurements(double t0, double t1);
         void initializeVSLAM();
+        void publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stamp);
 };
 
 #endif

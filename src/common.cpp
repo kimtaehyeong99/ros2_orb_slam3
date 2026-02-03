@@ -233,7 +233,14 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
         SyncPolicy(10), rgb_sub_, depth_sub_);
     sync_->registerCallback(std::bind(&RGBDMode::rgbd_callback, this, _1, _2));
 
+    // Initialize pose publishers
+    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/orb_slam3/camera_pose", 10);
+    path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/orb_slam3/camera_path", 10);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    camera_path_.header.frame_id = "odom";
+
     RCLCPP_INFO(this->get_logger(), "RGBD Node initialized, waiting for camera data...");
+    RCLCPP_INFO(this->get_logger(), "Publishing pose to /orb_slam3/camera_pose and /orb_slam3/camera_path");
 }
 
 //* Destructor
@@ -318,8 +325,56 @@ void RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_
     // Run ORB-SLAM3 RGBD tracking
     Sophus::SE3f Tcw = pAgent->TrackRGBD(cv_rgb_ptr->image, depth_float, timestamp);
 
-    // Optional: You can publish the camera pose here
-    // Sophus::SE3f Twc = Tcw.inverse(); // Camera pose in world frame
+    // Publish pose to ROS2 topics
+    publishPose(Tcw, rgb_msg->header.stamp);
+}
+
+//* Publish camera pose to ROS2 topics
+void RGBDMode::publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stamp)
+{
+    // Check if pose is valid (not NaN)
+    if (Tcw.matrix().hasNaN()) {
+        return;
+    }
+
+    // Convert world-to-camera (Tcw) to camera-to-world (Twc) for visualization
+    Sophus::SE3f Twc = Tcw.inverse();
+
+    // Extract translation and rotation
+    Eigen::Vector3f t = Twc.translation();
+    Eigen::Quaternionf q(Twc.rotationMatrix());
+
+    // Create PoseStamped message
+    geometry_msgs::msg::PoseStamped pose_msg;
+    pose_msg.header.stamp = stamp;
+    pose_msg.header.frame_id = "odom";
+
+    pose_msg.pose.position.x = t.x();
+    pose_msg.pose.position.y = t.y();
+    pose_msg.pose.position.z = t.z();
+    pose_msg.pose.orientation.x = q.x();
+    pose_msg.pose.orientation.y = q.y();
+    pose_msg.pose.orientation.z = q.z();
+    pose_msg.pose.orientation.w = q.w();
+
+    // Publish pose
+    pose_pub_->publish(pose_msg);
+
+    // Add to path and publish
+    camera_path_.header.stamp = stamp;
+    camera_path_.poses.push_back(pose_msg);
+    path_pub_->publish(camera_path_);
+
+    // Broadcast TF transform
+    geometry_msgs::msg::TransformStamped tf_msg;
+    tf_msg.header.stamp = stamp;
+    tf_msg.header.frame_id = "odom";
+    tf_msg.child_frame_id = "camera_link";
+    tf_msg.transform.translation.x = t.x();
+    tf_msg.transform.translation.y = t.y();
+    tf_msg.transform.translation.z = t.z();
+    tf_msg.transform.rotation = pose_msg.pose.orientation;
+    tf_broadcaster_->sendTransform(tf_msg);
 }
 
 
@@ -375,7 +430,14 @@ IMU_RGBDMode::IMU_RGBDMode() : Node("rgbd_imu_node_cpp")
         SyncPolicy(10), rgb_sub_, depth_sub_);
     sync_->registerCallback(std::bind(&IMU_RGBDMode::rgbd_callback, this, _1, _2));
 
+    // Initialize pose publishers
+    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/orb_slam3/camera_pose", 10);
+    path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/orb_slam3/camera_path", 10);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    camera_path_.header.frame_id = "odom";
+
     RCLCPP_INFO(this->get_logger(), "IMU_RGBD Node initialized, waiting for camera and IMU data...");
+    RCLCPP_INFO(this->get_logger(), "Publishing pose to /orb_slam3/camera_pose and /orb_slam3/camera_path");
 }
 
 //* Destructor
@@ -511,7 +573,55 @@ void IMU_RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& 
     // Run ORB-SLAM3 RGBD tracking with IMU data
     Sophus::SE3f Tcw = pAgent->TrackRGBD(cv_rgb_ptr->image, depth_float, timestamp, vImuMeas);
 
-    // Optional: You can publish the camera pose here
-    // Sophus::SE3f Twc = Tcw.inverse(); // Camera pose in world frame
+    // Publish pose to ROS2 topics
+    publishPose(Tcw, rgb_msg->header.stamp);
+}
+
+//* Publish camera pose to ROS2 topics
+void IMU_RGBDMode::publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stamp)
+{
+    // Check if pose is valid (not NaN)
+    if (Tcw.matrix().hasNaN()) {
+        return;
+    }
+
+    // Convert world-to-camera (Tcw) to camera-to-world (Twc) for visualization
+    Sophus::SE3f Twc = Tcw.inverse();
+
+    // Extract translation and rotation
+    Eigen::Vector3f t = Twc.translation();
+    Eigen::Quaternionf q(Twc.rotationMatrix());
+
+    // Create PoseStamped message
+    geometry_msgs::msg::PoseStamped pose_msg;
+    pose_msg.header.stamp = stamp;
+    pose_msg.header.frame_id = "odom";
+
+    pose_msg.pose.position.x = t.x();
+    pose_msg.pose.position.y = t.y();
+    pose_msg.pose.position.z = t.z();
+    pose_msg.pose.orientation.x = q.x();
+    pose_msg.pose.orientation.y = q.y();
+    pose_msg.pose.orientation.z = q.z();
+    pose_msg.pose.orientation.w = q.w();
+
+    // Publish pose
+    pose_pub_->publish(pose_msg);
+
+    // Add to path and publish
+    camera_path_.header.stamp = stamp;
+    camera_path_.poses.push_back(pose_msg);
+    path_pub_->publish(camera_path_);
+
+    // Broadcast TF transform
+    geometry_msgs::msg::TransformStamped tf_msg;
+    tf_msg.header.stamp = stamp;
+    tf_msg.header.frame_id = "odom";
+    tf_msg.child_frame_id = "camera_link";
+    tf_msg.transform.translation.x = t.x();
+    tf_msg.transform.translation.y = t.y();
+    tf_msg.transform.translation.z = t.z();
+    tf_msg.transform.rotation = pose_msg.pose.orientation;
+    tf_broadcaster_->sendTransform(tf_msg);
 }
 
