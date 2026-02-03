@@ -198,7 +198,7 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
 {
     //* Find path to home directory
     homeDir = getenv("HOME");
-    packagePath = "umi_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+    packagePath = "umi_ws/src/umi_gripper_test/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
 
     RCLCPP_INFO(this->get_logger(), "\nORB-SLAM3-V1 RGBD NODE STARTED");
 
@@ -206,17 +206,20 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
     this->declare_parameter("settings_name", "RealSense_D405");
     this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw");
     this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
+    this->declare_parameter("enable_viewer", true);
 
     // Get parameter values
     settingsName = this->get_parameter("settings_name").as_string();
     rgbTopicName = this->get_parameter("rgb_topic").as_string();
     depthTopicName = this->get_parameter("depth_topic").as_string();
+    enablePangolinWindow = this->get_parameter("enable_viewer").as_bool();
 
     // Set default paths
     vocFilePath = homeDir + "/" + packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
     settingsFilePath = homeDir + "/" + packagePath + "orb_slam3/config/RGBD/" + settingsName + ".yaml";
 
     RCLCPP_INFO(this->get_logger(), "Settings name: %s", settingsName.c_str());
+    RCLCPP_INFO(this->get_logger(), "Viewer enabled: %s", enablePangolinWindow ? "true" : "false");
     RCLCPP_INFO(this->get_logger(), "Vocabulary file: %s", vocFilePath.c_str());
     RCLCPP_INFO(this->get_logger(), "Settings file: %s", settingsFilePath.c_str());
     RCLCPP_INFO(this->get_logger(), "RGB topic: %s", rgbTopicName.c_str());
@@ -275,7 +278,7 @@ void RGBDMode::initializeVSLAM()
 
     // Initialize ORB-SLAM3 with RGBD sensor type
     sensorType = ORB_SLAM3::System::RGBD;
-    enablePangolinWindow = true;
+    // enablePangolinWindow is set from ROS2 parameter 'enable_viewer'
 
     RCLCPP_INFO(this->get_logger(), "Initializing ORB-SLAM3 in RGBD mode...");
     pAgent = new ORB_SLAM3::System(vocFilePath, settingsFilePath, sensorType, enablePangolinWindow);
