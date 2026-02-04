@@ -286,26 +286,40 @@ void RGBDMode::initializeVSLAM()
     RCLCPP_INFO(this->get_logger(), "ORB-SLAM3 RGBD system initialized successfully!");
 }
 
-//* Callback to process synchronized RGB and Depth images
-void RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
-                             const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg)
+//* Callback to process synchronized compressed RGB and Depth images
+void RGBDMode::rgbd_callback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr& rgb_msg,
+                             const sensor_msgs::msg::CompressedImage::ConstSharedPtr& depth_msg)
 {
     if (!bInitialized) {
         return;
     }
 
-    cv_bridge::CvImageConstPtr cv_rgb_ptr;
-    cv_bridge::CvImageConstPtr cv_depth_ptr;
+    cv::Mat rgb_image;
+    cv::Mat depth_image;
 
     try {
-        // Convert RGB image
-        cv_rgb_ptr = cv_bridge::toCvShare(rgb_msg, sensor_msgs::image_encodings::BGR8);
+        // Decode compressed RGB image (JPEG/PNG)
+        rgb_image = cv::imdecode(cv::Mat(rgb_msg->data), cv::IMREAD_COLOR);
+        if (rgb_image.empty()) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to decode RGB image");
+            return;
+        }
 
-        // Convert Depth image (preserve original encoding for depth)
-        cv_depth_ptr = cv_bridge::toCvShare(depth_msg);
+        // Decode compressed depth image (compressedDepth format)
+        // compressedDepth format: 12-byte header + PNG compressed 16-bit depth
+        if (depth_msg->data.size() > 12) {
+            // Skip the 12-byte header and decode PNG
+            std::vector<uint8_t> png_data(depth_msg->data.begin() + 12, depth_msg->data.end());
+            depth_image = cv::imdecode(cv::Mat(png_data), cv::IMREAD_UNCHANGED);
+        }
+
+        if (depth_image.empty()) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to decode depth image");
+            return;
+        }
     }
-    catch (cv_bridge::Exception& e) {
-        RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+    catch (cv::Exception& e) {
+        RCLCPP_ERROR(this->get_logger(), "OpenCV exception: %s", e.what());
         return;
     }
 
@@ -315,21 +329,21 @@ void RGBDMode::rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_
     // Convert depth to CV_32F if needed (ORB-SLAM3 expects float depth)
     // NOTE: Keep depth in mm unit, ORB-SLAM3 will convert using DepthMapFactor from YAML
     cv::Mat depth_float;
-    if (cv_depth_ptr->image.type() == CV_16UC1) {
+    if (depth_image.type() == CV_16UC1) {
         // Type conversion only, keep mm unit (ORB-SLAM3 uses DepthMapFactor for mm->m conversion)
-        cv_depth_ptr->image.convertTo(depth_float, CV_32F);
-    } else if (cv_depth_ptr->image.type() == CV_32FC1) {
-        depth_float = cv_depth_ptr->image;
+        depth_image.convertTo(depth_float, CV_32F);
+    } else if (depth_image.type() == CV_32FC1) {
+        depth_float = depth_image;
     } else {
-        RCLCPP_WARN(this->get_logger(), "Unexpected depth image type: %d", cv_depth_ptr->image.type());
-        cv_depth_ptr->image.convertTo(depth_float, CV_32F);
+        RCLCPP_WARN(this->get_logger(), "Unexpected depth image type: %d", depth_image.type());
+        depth_image.convertTo(depth_float, CV_32F);
     }
 
     // Run ORB-SLAM3 RGBD tracking
-    Sophus::SE3f Tcw = pAgent->TrackRGBD(cv_rgb_ptr->image, depth_float, timestamp);
+    Sophus::SE3f Tcw = pAgent->TrackRGBD(rgb_image, depth_float, timestamp);
 
     // Publish pose to ROS2 topics
-    publishPose(Tcw, rgb_msg->header.stamp);
+    publishPose(Tcw, rclcpp::Time(rgb_msg->header.stamp));
 }
 
 //* Publish camera pose to ROS2 topics

@@ -26,6 +26,7 @@
 #include <std_msgs/msg/string.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include <deque>
 using std::placeholders::_1; //* TODO why this is suggested in official tutorial
@@ -142,12 +143,12 @@ class RGBDMode : public rclcpp::Node
         std::string rgbTopicName = "";
         std::string depthTopicName = "";
 
-        // Message filters for synchronized RGB-D subscription
-        message_filters::Subscriber<sensor_msgs::msg::Image> rgb_sub_;
-        message_filters::Subscriber<sensor_msgs::msg::Image> depth_sub_;
+        // Message filters for synchronized RGB-D subscription (CompressedImage)
+        message_filters::Subscriber<sensor_msgs::msg::CompressedImage> rgb_sub_;
+        message_filters::Subscriber<sensor_msgs::msg::CompressedImage> depth_sub_;
 
         typedef message_filters::sync_policies::ApproximateTime<
-            sensor_msgs::msg::Image, sensor_msgs::msg::Image> SyncPolicy;
+            sensor_msgs::msg::CompressedImage, sensor_msgs::msg::CompressedImage> SyncPolicy;
         std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
 
         // ORB_SLAM3 related variables
@@ -162,8 +163,8 @@ class RGBDMode : public rclcpp::Node
         nav_msgs::msg::Path camera_path_;
 
         // ROS callbacks
-        void rgbd_callback(const sensor_msgs::msg::Image::ConstSharedPtr& rgb_msg,
-                          const sensor_msgs::msg::Image::ConstSharedPtr& depth_msg);
+        void rgbd_callback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr& rgb_msg,
+                          const sensor_msgs::msg::CompressedImage::ConstSharedPtr& depth_msg);
 
         // Helper functions
         void initializeVSLAM();
