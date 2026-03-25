@@ -15,6 +15,7 @@ LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules) # REDUNDANT?
 find_package(Python3 REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -58,6 +59,7 @@ include_directories(
 set(THIS_PACKAGE_INCLUDE_DEPENDS
   rclcpp
   rclpy
+  ament_index_cpp
   std_msgs
   sensor_msgs
   geometry_msgs
@@ -238,5 +240,13 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+
+# Install ORB-SLAM3 data files (vocabulary + config) to share directory
+install(DIRECTORY orb_slam3/Vocabulary/
+  DESTINATION share/${PROJECT_NAME}/orb_slam3/Vocabulary
+)
+install(DIRECTORY orb_slam3/config/
+  DESTINATION share/${PROJECT_NAME}/orb_slam3/config
+)
 
 ament_package()

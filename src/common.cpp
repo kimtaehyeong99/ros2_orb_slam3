@@ -12,6 +12,7 @@ REQUIREMENTS
 
 //* Includes
 #include "ros2_orb_slam3/common.hpp"
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 //* Constructor
 MonocularMode::MonocularMode() :Node("mono_node_cpp")
@@ -20,8 +21,13 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     // https://roboticsbackend.com/rclcpp-params-tutorial-get-set-ros2-params-with-cpp/
     
     //* Find path to home directory
-    homeDir = getenv("HOME");
-    packagePath = "umi_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+    homeDir = "";
+    try {
+        packagePath = ament_index_cpp::get_package_share_directory("ros2_orb_slam3") + "/";
+    } catch (...) {
+        homeDir = getenv("HOME");
+        packagePath = "ros2_ws/src/ros2_orb_slam3/";
+    }
     // std::cout<<"Home: "<<homeDir<<std::endl;
     
     // std::cout<<"VLSAM NODE STARTED\n\n";
@@ -49,12 +55,12 @@ MonocularMode::MonocularMode() :Node("mono_node_cpp")
     // rclcpp::Parameter param4 = this->get_parameter("settings_file_name_arg");
     
   
-    //* HARDCODED, set paths
+    //* Set default paths using ament_index (no hardcoded paths)
     if (vocFilePath == "file_not_set" || settingsFilePath == "file_not_set")
     {
         pass;
-        vocFilePath = homeDir + "/" + packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
-        settingsFilePath = homeDir + "/" + packagePath + "orb_slam3/config/Monocular/";
+        vocFilePath = packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
+        settingsFilePath = packagePath + "orb_slam3/config/Monocular/";
     }
 
     // std::cout<<"vocFilePath: "<<vocFilePath<<std::endl;
@@ -196,16 +202,21 @@ void MonocularMode::Img_callback(const sensor_msgs::msg::Image& msg)
 //* Constructor
 RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
 {
-    //* Find path to home directory
-    homeDir = getenv("HOME");
-    packagePath = "umi_ws/src/umi_gripper_test/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+    //* Find path using ament_index (no hardcoded paths)
+    homeDir = "";
+    try {
+        packagePath = ament_index_cpp::get_package_share_directory("ros2_orb_slam3") + "/";
+    } catch (...) {
+        homeDir = getenv("HOME");
+        packagePath = "ros2_ws/src/ros2_orb_slam3/";
+    }
 
     RCLCPP_INFO(this->get_logger(), "\nORB-SLAM3-V1 RGBD NODE STARTED");
 
     // Declare parameters
     this->declare_parameter("settings_name", "RealSense_D405");
-    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw/compressed");
-    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw/compressedDepth");
+    this->declare_parameter("rgb_topic", "/camera/camera/color/image_rect_raw");
+    this->declare_parameter("depth_topic", "/camera/camera/aligned_depth_to_color/image_raw");
     this->declare_parameter("enable_viewer", true);
 
     // Get parameter values
@@ -215,8 +226,8 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
     enablePangolinWindow = this->get_parameter("enable_viewer").as_bool();
 
     // Set default paths
-    vocFilePath = homeDir + "/" + packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
-    settingsFilePath = homeDir + "/" + packagePath + "orb_slam3/config/RGBD/" + settingsName + ".yaml";
+    vocFilePath = packagePath + "orb_slam3/Vocabulary/ORBvoc.txt.bin";
+    settingsFilePath = packagePath + "orb_slam3/config/RGBD/" + settingsName + ".yaml";
 
     RCLCPP_INFO(this->get_logger(), "Settings name: %s", settingsName.c_str());
     RCLCPP_INFO(this->get_logger(), "Viewer enabled: %s", enablePangolinWindow ? "true" : "false");
@@ -237,13 +248,13 @@ RGBDMode::RGBDMode() : Node("rgbd_node_cpp")
     sync_->registerCallback(std::bind(&RGBDMode::rgbd_callback, this, _1, _2));
 
     // Initialize pose publishers
-    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/orb_slam3/camera_pose", 10);
+    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/odom/camera_pose", 10);
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/orb_slam3/camera_path", 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     camera_path_.header.frame_id = "odom";
 
     RCLCPP_INFO(this->get_logger(), "RGBD Node initialized, waiting for camera data...");
-    RCLCPP_INFO(this->get_logger(), "Publishing pose to /orb_slam3/camera_pose and /orb_slam3/camera_path");
+    RCLCPP_INFO(this->get_logger(), "Publishing pose to /odom/camera_pose and /orb_slam3/camera_path");
 }
 
 //* Destructor
@@ -358,8 +369,18 @@ void RGBDMode::publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stamp)
     Sophus::SE3f Twc = Tcw.inverse();
 
     // Extract translation and rotation
-    Eigen::Vector3f t = Twc.translation();
-    Eigen::Quaternionf q(Twc.rotationMatrix());
+    Eigen::Vector3f t_slam = Twc.translation();
+    Eigen::Matrix3f R_slam = Twc.rotationMatrix();
+
+    // SLAM optical frame → ROS frame (x=forward, y=left, z=up)
+    // Observed: Phys x+→SLAM z+, Phys y+→SLAM -y, Phys z+→SLAM x+
+    Eigen::Matrix3f R_correction;
+    R_correction << 0, 0, 1,
+                    0, -1, 0,
+                    1, 0, 0;
+
+    Eigen::Vector3f t = R_correction * t_slam;
+    Eigen::Quaternionf q(R_correction * R_slam * R_correction.transpose());
 
     // Create PoseStamped message
     geometry_msgs::msg::PoseStamped pose_msg;
@@ -403,8 +424,13 @@ void RGBDMode::publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stamp)
 IMU_RGBDMode::IMU_RGBDMode() : Node("rgbd_imu_node_cpp")
 {
     //* Find path to home directory
-    homeDir = getenv("HOME");
-    packagePath = "umi_ws/src/ros2_orb_slam3/"; // !HARDCODED, change it as necessary
+    homeDir = "";
+    try {
+        packagePath = ament_index_cpp::get_package_share_directory("ros2_orb_slam3") + "/";
+    } catch (...) {
+        homeDir = getenv("HOME");
+        packagePath = "ros2_ws/src/ros2_orb_slam3/";
+    }
 
     RCLCPP_INFO(this->get_logger(), "\nORB-SLAM3 IMU_RGBD NODE STARTED");
 
@@ -448,13 +474,13 @@ IMU_RGBDMode::IMU_RGBDMode() : Node("rgbd_imu_node_cpp")
     sync_->registerCallback(std::bind(&IMU_RGBDMode::rgbd_callback, this, _1, _2));
 
     // Initialize pose publishers
-    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/orb_slam3/camera_pose", 10);
+    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/odom/camera_pose", 10);
     path_pub_ = this->create_publisher<nav_msgs::msg::Path>("/orb_slam3/camera_path", 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     camera_path_.header.frame_id = "odom";
 
     RCLCPP_INFO(this->get_logger(), "IMU_RGBD Node initialized, waiting for camera and IMU data...");
-    RCLCPP_INFO(this->get_logger(), "Publishing pose to /orb_slam3/camera_pose and /orb_slam3/camera_path");
+    RCLCPP_INFO(this->get_logger(), "Publishing pose to /odom/camera_pose and /orb_slam3/camera_path");
 }
 
 //* Destructor
@@ -606,8 +632,18 @@ void IMU_RGBDMode::publishPose(const Sophus::SE3f& Tcw, const rclcpp::Time& stam
     Sophus::SE3f Twc = Tcw.inverse();
 
     // Extract translation and rotation
-    Eigen::Vector3f t = Twc.translation();
-    Eigen::Quaternionf q(Twc.rotationMatrix());
+    Eigen::Vector3f t_slam = Twc.translation();
+    Eigen::Matrix3f R_slam = Twc.rotationMatrix();
+
+    // SLAM optical frame → ROS frame (x=forward, y=left, z=up)
+    // Observed: Phys x+→SLAM z+, Phys y+→SLAM -y, Phys z+→SLAM x+
+    Eigen::Matrix3f R_correction;
+    R_correction << 0, 0, 1,
+                    0, -1, 0,
+                    1, 0, 0;
+
+    Eigen::Vector3f t = R_correction * t_slam;
+    Eigen::Quaternionf q(R_correction * R_slam * R_correction.transpose());
 
     // Create PoseStamped message
     geometry_msgs::msg::PoseStamped pose_msg;
